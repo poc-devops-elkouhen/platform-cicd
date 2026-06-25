@@ -1,0 +1,77 @@
+# Registry Docker minimaliste (image officielle "registry:2") pour stocker les
+# images construites par la CI. Pas d'auth, pas de TLS : usage interne au cluster
+# local uniquement. Accès in-cluster via registry.registry.svc.cluster.local:5000
+# et depuis l'hôte via http://registry.192.168.33.100.nip.io (HTTPRoute Traefik).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: registry
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      containers:
+        - name: registry
+          image: registry:2
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "true"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  selector:
+    app: registry
+  ports:
+    - port: 5000
+      targetPort: 5000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  parentRefs:
+    - name: traefik-gateway
+      namespace: default
+  hostnames:
+    - registry.192.168.33.100.nip.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: registry
+          port: 5000

@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gitlab-agent
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://charts.gitlab.io/
+    chart: gitlab-agent
+    targetRevision: 2.28.0
+    helm:
+      values: |
+        replicas: 1
+        config:
+          secretName: gitlab-agent-token
+          # Le pod agentk tourne dans le cluster : la HTTPRoute kas.192.168.33.100.nip.io
+          # résoudrait vers le pod lui-même. On utilise donc le Service KAS interne
+          # exposé par le chart GitLab.
+          kasAddress: ws://gitlab-kas.gitlab.svc.cluster.local:8150
+          operational_container_scanning:
+            enabled: false
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gitlab-agent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

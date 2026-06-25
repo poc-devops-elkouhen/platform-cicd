@@ -1,0 +1,28 @@
+# Unique objet appliqué à la main (kubectl, une fois -- cf. `make argocd-bootstrap`) :
+# ArgoCD ne peut pas se "bootstrapper" lui-même depuis rien. Une fois synchronisé,
+# ce root Application ("app of apps") fait d'ArgoCD la source de vérité continue
+# pour tout argocd/managed/ -- GitLab, l'agent Kubernetes GitLab, le registry,
+# l'exposition HTTP d'ArgoCD et, en cascade via l'ApplicationSet qui y est
+# généré, toutes les apps/services déclarés dans argocd/apps.yaml. Les add-ons
+# cluster bas niveau (Gateway API, MetalLB, Traefik, Gateway partagée) sont
+# provisionnés par Ansible avant ArgoCD.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/elkouhen/poc-devops-platform.git
+    targetRevision: main
+    path: argocd/managed
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

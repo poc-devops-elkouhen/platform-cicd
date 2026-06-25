@@ -1,0 +1,104 @@
+ciTemplate:
+  projectPath: root/ci-templates
+  projectName: ci-templates
+  sourceDir: ../poc-devops-ci-templates
+  ref: v0.11.0
+  file: /gitlab-ci.yml
+
+agent:
+  projectPath: root/helloworld
+  name: poc-devops
+
+gitlab:
+  # Constante de plateforme (même instance GitLab pour toutes les apps/services) --
+  # un seul endroit, plutôt qu'un champ dupliqué par app comme avant.
+  internalHost: gitlab-webservice-default.gitlab.svc.cluster.local:8181
+
+apps:
+  - name: helloworld
+    # Propriété de la chaîne d'environnements de l'app (rec -> preprod? -> prod),
+    # partagée par tous ses services -- pas un choix par service.
+    hasPreprod: true
+    # Service "vitrine" pour l'URL affichée par GitLab sur la page
+    # Environments (un seul environment GitLab par stade, pas un par
+    # service) -- le frontend, point d'entrée humain de l'app.
+    showcaseService: helloworld-gui
+    manifests:
+      projectPath: root/helloworld-iac
+      projectName: helloworld-iac
+      sourceDir: ../helloworld-iac
+      repoURL: http://gitlab-webservice-default.gitlab.svc.cluster.local:8181/root/helloworld-iac.git
+      mainPushAccessLevel: 40
+      argocdSecretName: gitlab-helloworld-iac-repo
+      # Sous-dossier des manifestes k8s dans ce dépôt -- prépare l'arrivée
+      # d'un sous-dossier sœur (ex. "terraform") pour l'IaC non-k8s.
+      path: k8s
+    # Monorepo multi-services (cf. AGENTS.md "Monorepo multi-services") : un
+    # seul dépôt de code pour l'app, un sous-dossier par service
+    # (sourceDir/<service.name>/Dockerfile), un seul cycle de release
+    # GitLab Flow (tag vX.Y.Z) qui build/déploie tous les services ensemble
+    # -- pas de versioning indépendant par service.
+    code:
+      projectPath: root/helloworld
+      projectName: helloworld
+      sourceDir: ../helloworld
+      mainPushAccessLevel: 0
+    services:
+      - name: helloworld-svc
+        image: registry.registry.svc.cluster.local:5000/helloworld-svc
+      - name: helloworld-gui
+        image: registry.registry.svc.cluster.local:5000/helloworld-gui
+    environments:
+      - name: dev
+        branch: dev
+        namespace: helloworld-dev
+        services:
+          - name: helloworld-svc
+            url: http://helloworld-svc-dev.192.168.33.100.nip.io
+            ingressHost: helloworld-svc-dev.192.168.33.100.nip.io
+          - name: helloworld-gui
+            url: http://helloworld-gui-dev.192.168.33.100.nip.io
+            ingressHost: helloworld-gui-dev.192.168.33.100.nip.io
+      - name: rec
+        branch: rec
+        namespace: helloworld-rec
+        services:
+          - name: helloworld-svc
+            url: http://helloworld-svc-rec.192.168.33.100.nip.io
+            ingressHost: helloworld-svc-rec.192.168.33.100.nip.io
+          - name: helloworld-gui
+            url: http://helloworld-gui-rec.192.168.33.100.nip.io
+            ingressHost: helloworld-gui-rec.192.168.33.100.nip.io
+      - name: preprod
+        branch: preprod
+        namespace: helloworld-preprod
+        services:
+          - name: helloworld-svc
+            url: http://helloworld-svc-preprod.192.168.33.100.nip.io
+            ingressHost: helloworld-svc-preprod.192.168.33.100.nip.io
+          - name: helloworld-gui
+            url: http://helloworld-gui-preprod.192.168.33.100.nip.io
+            ingressHost: helloworld-gui-preprod.192.168.33.100.nip.io
+      - name: prod
+        branch: main
+        namespace: helloworld-prod
+        services:
+          - name: helloworld-svc
+            url: http://helloworld-svc.192.168.33.100.nip.io
+            ingressHost: helloworld-svc.192.168.33.100.nip.io
+          - name: helloworld-gui
+            url: http://helloworld-gui.192.168.33.100.nip.io
+            ingressHost: helloworld-gui.192.168.33.100.nip.io
+    argocd:
+      project: helloworld
+      sourceRepos:
+        - http://gitlab-webservice-default.gitlab.svc.cluster.local:8181/root/helloworld-iac.git
+      destinations:
+        - server: https://kubernetes.default.svc
+          namespace: helloworld-dev
+        - server: https://kubernetes.default.svc
+          namespace: helloworld-rec
+        - server: https://kubernetes.default.svc
+          namespace: helloworld-preprod
+        - server: https://kubernetes.default.svc
+          namespace: helloworld-prod

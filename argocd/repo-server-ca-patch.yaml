@@ -1,0 +1,23 @@
+# Monte un bundle de CA personnalisé (système + CA d'inspection TLS type Zscaler)
+# dans argocd-repo-server, et le pointe via SSL_CERT_FILE. Nécessaire car le
+# CA par-hôte de argocd-tls-certs-cm remplace entièrement le pool de confiance
+# pour tout l'appel `helm pull`, ce qui casse la résolution des charts dont
+# l'archive est hébergée sur un domaine non intercepté (ex. S3/CDN).
+# Le ConfigMap référencé (argocd-repo-server-ca-bundle) est généré par
+# `make argocd-trust-corporate-ca`.
+spec:
+  template:
+    spec:
+      volumes:
+        - name: custom-ca-bundle
+          configMap:
+            name: argocd-repo-server-ca-bundle
+      containers:
+        - name: argocd-repo-server
+          env:
+            - name: SSL_CERT_FILE
+              value: /custom-ca/ca-certificates.crt
+          volumeMounts:
+            - name: custom-ca-bundle
+              mountPath: /custom-ca
+              readOnly: true
