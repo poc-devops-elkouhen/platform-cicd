@@ -38,6 +38,14 @@ global:
   pages:
     objectStore:
       enabled: false
+minio:
+  # arm64 nodes cannot run the 2017/2018 amd64-only GitLab mirror images;
+  # these versions support arm64 and still expose the old mc policy/config API.
+  image: minio/minio
+  imageTag: RELEASE.2022-09-17T00-09-45Z
+  minioMc:
+    image: minio/mc
+    tag: RELEASE.2022-09-16T09-16-06Z
 installCertmanager: false
 # ArgoCD exécute les hooks "pre-upgrade" dès le premier sync (il ne distingue
 # pas install vs upgrade comme le ferait `helm install`), ce qui fait échouer
