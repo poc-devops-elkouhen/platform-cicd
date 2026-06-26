@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - name: argocd-config
+            path: argocd/platform/argocd-config
+            namespace: argocd
+            wave: "0"
+          - name: registry
+            path: argocd/platform/registry
+            namespace: registry
+            wave: "0"
+          - name: argocd-ui
+            path: argocd/platform/argocd-ui
+            namespace: argocd
+            wave: "0"
+          - name: gitlab-routes
+            path: argocd/platform/gitlab-routes
+            namespace: gitlab
+            wave: "1"
+  template:
+    metadata:
+      name: "{{ .name }}"
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{ .wave }}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/elkouhen/poc-devops-platform.git
+        targetRevision: main
+        path: "{{ .path }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ .namespace }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

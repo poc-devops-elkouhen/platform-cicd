@@ -1,0 +1,7 @@
+name: helloworld
+hasPreprod: true
+services:
+  - helloworld-svc
+  - helloworld-gui
+manifests:
+  path: k8s
