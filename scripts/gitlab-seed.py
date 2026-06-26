@@ -45,6 +45,10 @@ CI_TEMPLATE_REF = os.environ.get("CI_TEMPLATE_REF") or yaml_value("ciTemplate.re
 CI_TEMPLATE_FILE = os.environ.get("CI_TEMPLATE_FILE") or yaml_value("ciTemplate.file")
 REGISTRY_HOST = os.environ.get("REGISTRY_HOST", "registry.registry.svc.cluster.local:5000")
 INTERNAL_GITLAB_HOST = os.environ.get("INTERNAL_GITLAB_HOST") or yaml_value("gitlab.internalHost")
+DOMAIN = os.environ.get("DOMAIN") or yaml_value("platform.domain")
+CI_SCRIPTS_SRC_DIR = Path(
+    os.environ.get("CI_SCRIPTS_SRC_DIR") or REPO_ROOT / yaml_value("ciTemplate.sourceDir")
+)
 
 
 def kube_secret_field(namespace, name, jsonpath):
@@ -317,7 +321,7 @@ def ensure_push_token_variable(project_id, label):
 
 
 def render_app_ci(app_name, services, showcase_service, internal_gitlab_host,
-                  manifests_project_path, manifests_path, has_preprod, out_path):
+                  manifests_project_path, manifests_path, has_preprod, domain, out_path):
     Path(out_path).write_text(
         f"include:\n"
         f"  - project: {CI_TEMPLATE_PROJECT_PATH}\n"
@@ -326,15 +330,42 @@ def render_app_ci(app_name, services, showcase_service, internal_gitlab_host,
         f"\n"
         f"variables:\n"
         f"  APP_NAME: {app_name}\n"
-        f"  # Monorepo multi-services (cf. AGENTS.md) : liste \"<service>=<image>\"\n"
-        f"  # espacée, un sous-dossier + un Dockerfile par service. SERVICE_NAME reste\n"
-        f"  # le service vitrine pour l'URL des environnements GitLab CI.\n"
+        f"  # Monorepo multi-services : liste \"<service>=<image>\" espacée.\n"
+        f"  # SERVICE_NAME est le service vitrine pour l'URL des environnements.\n"
         f'  SERVICES: "{services}"\n'
         f"  SERVICE_NAME: {showcase_service}\n"
+        f"  DOMAIN: {domain}\n"
         f"  INTERNAL_GITLAB_HOST: {internal_gitlab_host}\n"
         f"  MANIFESTS_PROJECT_PATH: {manifests_project_path}\n"
         f"  MANIFESTS_PATH: {manifests_path}\n"
         f'  HAS_PREPROD: "{has_preprod}"\n'
+    )
+
+
+def render_app_ci_local(out_path: Path) -> None:
+    """Génère .gitlab-ci-local.yml pour l'exécution locale des jobs CI."""
+    ci_template_dir_name = CI_SCRIPTS_SRC_DIR.resolve().name
+    domain = DOMAIN
+    external_gitlab_host = f"gitlab.{domain}"
+    out_path.write_text(
+        f"# Surcharges pour gitlab-ci-local (https://github.com/firecow/gitlab-ci-local).\n"
+        f"# Ce fichier est commitable — il utilise un chemin relatif conventionnel.\n"
+        f"# Les secrets vont dans .gitlab-ci-local-secrets.yml (gitignore).\n"
+        f"#\n"
+        f"# Prérequis : {ci_template_dir_name} doit être un dossier voisin :\n"
+        f"#   ../{ci_template_dir_name}/\n"
+        f"\n"
+        f"volumes:\n"
+        f"  # Monte les scripts Python du template CI sans avoir à les cloner depuis GitLab.\n"
+        f"  - ../{ci_template_dir_name}:/ci-scripts:ro\n"
+        f"\n"
+        f"variables:\n"
+        f"  CI_SCRIPTS_DIR: /ci-scripts\n"
+        f"  # En local, GitLab est accessible via l'adresse externe (pas l'URL in-cluster).\n"
+        f"  INTERNAL_GITLAB_HOST: {external_gitlab_host}\n"
+        f"  DOMAIN: {domain}\n"
+        f"  # SHA court par défaut pour les jobs deploy-dev en local.\n"
+        f"  CI_COMMIT_SHORT_SHA: local\n"
     )
 
 
@@ -412,17 +443,22 @@ for app in inventory["apps"]:
     ci_file = code_source_dir / ".gitlab-ci.yml"
     render_app_ci(
         app_name, services_str, app["showcaseService"], INTERNAL_GITLAB_HOST,
-        manifests["projectPath"], manifests["path"], has_preprod_str, ci_file,
+        manifests["projectPath"], manifests["path"], has_preprod_str, DOMAIN, ci_file,
     )
 
+    ci_local_file = code_source_dir / ".gitlab-ci-local.yml"
+    render_app_ci_local(ci_local_file)
+
+    ci_files = [".gitlab-ci.yml", ".gitlab-ci-local.yml"]
     git_status = subprocess.run(
-        ["git", "-C", str(code_source_dir), "status", "--porcelain", "--", ".gitlab-ci.yml"],
+        ["git", "-C", str(code_source_dir), "status", "--porcelain", "--"] + ci_files,
         capture_output=True, text=True, check=True,
     ).stdout.strip()
 
     if git_status:
-        print(f"Commit du fichier CI GitLab dans le dépôt réel '{code_source_dir}'...")
-        subprocess.run(["git", "-C", str(code_source_dir), "add", ".gitlab-ci.yml"], check=True)
+        print(f"Commit des fichiers CI GitLab dans le dépôt réel '{code_source_dir}'...")
+        for f in ci_files:
+            subprocess.run(["git", "-C", str(code_source_dir), "add", f], check=True)
         subprocess.run(["git", "-C", str(code_source_dir), "commit", "-q", "-m", "chore: configure CI GitLab"], check=True)
 
     seed_project_from_repo(code["projectPath"], code_source_dir)

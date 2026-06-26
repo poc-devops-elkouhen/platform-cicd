@@ -132,12 +132,14 @@ sous-dossier) et le déploiement (plusieurs `kustomize edit set image`).
     recopiés depuis le fichier d'app, pas reconstruits implicitement.
     Cloisonnement explicite : une app ne peut pas, même par erreur de
     génération ou compromission, affecter les ressources d'une autre app. Plus
-    de fichier YAML à créer à la main par app. Implémentation locale :
+    de fichier YAML à créer à la main par app. Implémentation bootstrap locale :
     `scripts/render-argocd-apps.py`, dont la sortie est committée dans
     `argocd/managed/apps-appset.yaml` (régénérée par `make
     argocd-apps-render`, à pousser sur `origin main`) et synchronisée en
     continu par le root Application "app of apps" (`argocd/root-app.yaml`,
-    cf. "Point d'entrée" dans AGENTS.md).
+    cf. "Point d'entrée" dans AGENTS.md). Une copie réutilisable existe aussi
+    dans `../poc-devops-toolbox/scripts/render-argocd-apps.py`, pilotable avec
+    `PLATFORM_REPO_ROOT`.
   - **`gitlab-seed.py` généralisé** : boucle sur l'inventaire pour créer et
     seeder les dépôts `<app>`/`<app>-iac`, configurer les gates, et
     initialiser les branches d'environnement du dépôt manifests selon
@@ -212,13 +214,37 @@ visibles. Une cible produit naturelle serait de regrouper les étapes 3, 5 et 6
 dans une cible dédiée (`make app-register` ou équivalent) une fois le schéma
 d'inventaire stabilisé.
 
+## Outillage partagé
+
+Les scripts de bootstrap restent présents dans `scripts/` afin que
+`make bootstrap`, `make gitlab-seed`, `make argocd-repo-creds`,
+`make argocd-apps-render` et `make init-project` continuent de fonctionner
+depuis ce dépôt sans dépendre d'un repo frère.
+
+Une copie réutilisable de ces utilitaires a été extraite dans
+`../poc-devops-toolbox`. Cette toolbox sert aux autres projets ou aux appels
+hors du dépôt plateforme. Les scripts y acceptent `PLATFORM_REPO_ROOT` pour
+pointer vers la racine `poc-devops-platform` :
+
+```sh
+PLATFORM_REPO_ROOT=/chemin/vers/poc-devops-platform \
+  python3 ../poc-devops-toolbox/scripts/render-argocd-apps.py
+```
+
+Règle de maintenance : tant que le bootstrap plateforme dépend des scripts
+locaux, toute correction fonctionnelle d'un utilitaire partagé doit être
+répercutée dans les deux emplacements ou remplacée explicitement par un wrapper
+documenté. La toolbox ne doit pas devenir une dépendance implicite non déclarée
+de `make bootstrap`.
+
 ## Dette IaC connue
 
 La chaîne CI/CD principale (`make bootstrap`, GitLab, ArgoCD, registry,
 `helloworld`, inventaire multi-apps) est
 maintenant automatisée dans le dépôt.
 Les anciennes interventions manuelles de bootstrap ont été absorbées par les
-scripts versionnés :
+scripts versionnés localement, avec une copie partagée dans
+`../poc-devops-toolbox` :
 
 - `scripts/gitlab-seed.py` crée/seede les projets applicatifs et manifests,
   génère les `.gitlab-ci.yml`, initialise les branches d'environnement et
@@ -233,7 +259,8 @@ Ruby et Bash). Les scripts qui lisent ou écrivent du YAML
 (`filter-argocd-install.py`, `argocd-repo-creds.py`, `render-argocd-apps.py`,
 `gitlab-seed.py`) nécessitent `pyyaml` (`pip3 install -r requirements.txt`) ;
 `init-project.py` et `gitlab-runner-token.py` fonctionnent sans dépendance
-externe.
+externe. Dans la toolbox, `PLATFORM_REPO_ROOT` remplace les anciens chemins
+implicites basés sur l'emplacement du script.
 - `argocd/managed/` déclare les add-ons plateforme applicative synchronisés par
   ArgoCD ; les add-ons cluster bas niveau vivent dans Ansible.
 - `ansible/roles/kubernetes-platform` installe Gateway API, MetalLB, Traefik et
