@@ -1,6 +1,7 @@
 ARGOCD_NAMESPACE  ?= argocd
 ARGOCD_VERSION    ?= stable
 ARGOCD_INSTALL_URL = https://raw.githubusercontent.com/argoproj/argo-cd/$(ARGOCD_VERSION)/manifests/install.yaml
+ARGOCD_INSTALL_FILTER = scripts/filter-argocd-install.rb
 GITLAB_NAMESPACE  ?= gitlab
 GITLAB_DOMAIN     ?= 192.168.33.100.nip.io
 REGISTRY_NAMESPACE ?= registry
@@ -22,7 +23,7 @@ bootstrap: argocd-install argocd-wait argocd-trust-corporate-ca argocd-bootstrap
 
 argocd-install: ## Installe ArgoCD dans le cluster courant
 	kubectl create namespace $(ARGOCD_NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
-	kubectl apply --server-side --force-conflicts -n $(ARGOCD_NAMESPACE) -f $(ARGOCD_INSTALL_URL)
+	ruby $(ARGOCD_INSTALL_FILTER) "$(ARGOCD_INSTALL_URL)" | kubectl apply --server-side --force-conflicts -n $(ARGOCD_NAMESPACE) -f -
 
 argocd-wait: ## Attend que les pods ArgoCD soient prets
 	kubectl -n $(ARGOCD_NAMESPACE) wait --for=condition=Available deployment --all --timeout=180s
@@ -72,6 +73,7 @@ gitlab-seed: ## Cree/seed les projets GitLab declares dans argocd/apps.yaml
 	GITLAB_NAMESPACE=$(GITLAB_NAMESPACE) GITLAB_URL=http://gitlab.$(GITLAB_DOMAIN) ./scripts/gitlab-seed.sh
 
 registry-wait: ## Attend que le registry soit pret
+	sleep 5
 	kubectl -n $(REGISTRY_NAMESPACE) wait --for=condition=Available deployment/registry --timeout=120s
 
 registry-url: ## Affiche l'URL du registry

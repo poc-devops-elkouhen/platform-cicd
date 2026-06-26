@@ -37,11 +37,24 @@ spec:
           appConfig:
             defaultProjectsFeatures:
               containerRegistry: false
+            lfs:
+              enabled: false
+            artifacts:
+              enabled: false
+            uploads:
+              enabled: false
+            packages:
+              enabled: false
           webservice:
             # Puma tue un worker après 60s par défaut ; sur ce cluster arm64
             # mono-noeud, des requêtes lourdes (1er boot, imports) dépassent
             # ce délai sous charge CPU contrainte sans être réellement bloquées.
             workerTimeout: 120
+          minio:
+            enabled: false
+          pages:
+            objectStore:
+              enabled: false
         installCertmanager: false
         # ArgoCD exécute les hooks "pre-upgrade" dès le premier sync (il ne distingue
         # pas install vs upgrade comme le ferait `helm install`), ce qui fait échouer
@@ -76,22 +89,24 @@ spec:
                   helper_image = "registry.gitlab.com/gitlab-org/gitlab-runner/gitlab-runner-helper:arm64-v18.11.2"
                   cpu_request = "100m"
                   memory_request = "128Mi"
-                  cpu_limit = "1"
-                  memory_limit = "1Gi"
+                  cpu_limit = "500m"
+                  memory_limit = "512Mi"
         registry:
           enabled: false
-        # Le tag MinIO embarqué par le chart GitLab est très ancien et tire
-        # une image non compatible arm64 sur Apple Silicon (exec format error).
-        minio:
-          image: quay.io/minio/minio
-          imageTag: RELEASE.2024-01-16T16-07-38Z
-          minioMc:
-            image: quay.io/minio/mc
-            tag: RELEASE.2024-01-13T08-44-48Z
         gitlab:
+          migrations:
+            enabled: false
           webservice:
             minReplicas: 1
             maxReplicas: 1
+            # GitLab defaults to 2 Puma workers. On this local POC cluster each
+            # worker is close to 900Mi at boot, so a single worker is much more
+            # stable while still being enough for interactive usage and seeding.
+            workerProcesses: 1
+            resources:
+              requests:
+                cpu: 300m
+                memory: 1400Mi
             deployment:
               # >= workhorse.shutdownTimeout (workerTimeout+1=121s), avec marge.
               terminationGracePeriodSeconds: 150
@@ -119,11 +134,20 @@ spec:
           sidekiq:
             minReplicas: 1
             maxReplicas: 1
+            # The chart default is 20 threads, which is excessive for the POC and
+            # drives avoidable memory spikes from background jobs.
+            concurrency: 5
+            resources:
+              requests:
+                cpu: 300m
+                memory: 900Mi
           gitlab-exporter:
             enabled: false
           gitlab-shell:
             minReplicas: 1
             maxReplicas: 1
+          toolbox:
+            enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: gitlab
