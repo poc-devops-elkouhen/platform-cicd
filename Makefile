@@ -9,12 +9,12 @@ REGISTRY_HOSTNAME  = registry.registry.svc.cluster.local
 REGISTRY_HOST      = $(REGISTRY_HOSTNAME):5000
 CORPORATE_CA_LABEL ?= Zscaler
 
-.PHONY: help bootstrap argocd-install argocd-wait argocd-bootstrap argocd-trust-corporate-ca argocd-ingress argocd-url argocd-password gitlab-wait gitlab-password gitlab-url gitlab-status gitlab-runner-token gitlab-seed registry-wait registry-url argocd-repo-creds argocd-apps-render init-project helloworld-status status
+.PHONY: help bootstrap argocd-install argocd-wait argocd-bootstrap argocd-trust-corporate-ca argocd-ingress argocd-url argocd-password gitlab-wait gitlab-password gitlab-url gitlab-status gitlab-runner-token registry-wait registry-url argocd-apps-render init-project helloworld-status status
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
-bootstrap: argocd-install argocd-wait argocd-trust-corporate-ca argocd-bootstrap argocd-ingress gitlab-wait gitlab-runner-token gitlab-seed registry-wait argocd-repo-creds ## Deploie la plateforme sur le contexte Kubernetes courant, sans creer de cluster
+bootstrap: argocd-install argocd-wait argocd-trust-corporate-ca argocd-bootstrap argocd-ingress gitlab-wait gitlab-runner-token registry-wait ## Deploie la plateforme sur le contexte Kubernetes courant, sans creer de cluster
 	@echo ""
 	@echo "Plateforme prete."
 	@echo "GitLab  : http://gitlab.$(GITLAB_DOMAIN)  (root / make gitlab-password)"
@@ -69,9 +69,6 @@ gitlab-status: ## Affiche l'etat GitLab
 gitlab-runner-token: ## Cree le Secret K8s du token runner
 	GITLAB_NAMESPACE=$(GITLAB_NAMESPACE) GITLAB_URL=http://gitlab.$(GITLAB_DOMAIN) python3 ./scripts/gitlab-runner-token.py
 
-gitlab-seed: ## Cree/seed les projets GitLab declares dans l'inventaire apps
-	GITLAB_NAMESPACE=$(GITLAB_NAMESPACE) GITLAB_URL=http://gitlab.$(GITLAB_DOMAIN) python3 ./scripts/gitlab-seed.py
-
 registry-wait: ## Attend que le registry soit pret
 	sleep 5
 	kubectl -n $(REGISTRY_NAMESPACE) wait --for=condition=Available deployment/registry --timeout=120s
@@ -79,9 +76,6 @@ registry-wait: ## Attend que le registry soit pret
 registry-url: ## Affiche l'URL du registry
 	@echo "Hote   : http://registry.$(GITLAB_DOMAIN)"
 	@echo "Cluster: $(REGISTRY_HOST)"
-
-argocd-repo-creds: ## Cree les credentials ArgoCD pour les repos manifests prives
-	GITLAB_NAMESPACE=$(GITLAB_NAMESPACE) GITLAB_URL=http://gitlab.$(GITLAB_DOMAIN) ARGOCD_NAMESPACE=$(ARGOCD_NAMESPACE) python3 ./scripts/argocd-repo-creds.py
 
 argocd-apps-render: ## Regenere l'ApplicationSet depuis l'inventaire apps
 	python3 ./scripts/render-argocd-apps.py > argocd/managed/apps-appset.yaml
