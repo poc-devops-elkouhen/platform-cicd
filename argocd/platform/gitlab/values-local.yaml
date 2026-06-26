@@ -45,7 +45,7 @@ minio:
   imageTag: RELEASE.2022-09-17T00-09-45Z
   minioMc:
     image: minio/mc
-    tag: RELEASE.2022-09-16T09-16-06Z
+    tag: RELEASE.2022-09-16T09-16-47Z
 installCertmanager: false
 # ArgoCD exécute les hooks "pre-upgrade" dès le premier sync (il ne distingue
 # pas install vs upgrade comme le ferait `helm install`), ce qui fait échouer
