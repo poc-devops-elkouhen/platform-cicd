@@ -1,0 +1,83 @@
+# Généré par scripts/render-argocd-apps.py depuis argocd/apps.yaml + argocd/apps/*.yaml -- ne pas éditer à la main.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: helloworld
+  namespace: argocd
+spec:
+  sourceRepos:
+  - http://gitlab-webservice-default.gitlab.svc.cluster.local:8181/root/helloworld-iac.git
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: helloworld-dev
+  - server: https://kubernetes.default.svc
+    namespace: helloworld-rec
+  - server: https://kubernetes.default.svc
+    namespace: helloworld-preprod
+  - server: https://kubernetes.default.svc
+    namespace: helloworld
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+  - missingkey=error
+  generators:
+  - list:
+      elements:
+      - app: helloworld
+        project: helloworld
+        env: dev
+        branch: dev
+        namespace: helloworld-dev
+        repoURL: http://gitlab-webservice-default.gitlab.svc.cluster.local:8181/root/helloworld-iac.git
+        path: k8s
+      - app: helloworld
+        project: helloworld
+        env: rec
+        branch: rec
+        namespace: helloworld-rec
+        repoURL: http://gitlab-webservice-default.gitlab.svc.cluster.local:8181/root/helloworld-iac.git
+        path: k8s
+      - app: helloworld
+        project: helloworld
+        env: preprod
+        branch: preprod
+        namespace: helloworld-preprod
+        repoURL: http://gitlab-webservice-default.gitlab.svc.cluster.local:8181/root/helloworld-iac.git
+        path: k8s
+      - app: helloworld
+        project: helloworld
+        env: prod
+        branch: main
+        namespace: helloworld
+        repoURL: http://gitlab-webservice-default.gitlab.svc.cluster.local:8181/root/helloworld-iac.git
+        path: k8s
+  template:
+    metadata:
+      name: '{{ .app }}-{{ .env }}'
+      namespace: argocd
+      finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: '{{ .project }}'
+      source:
+        repoURL: '{{ .repoURL }}'
+        targetRevision: '{{ .branch }}'
+        path: '{{ .path }}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ .namespace }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
