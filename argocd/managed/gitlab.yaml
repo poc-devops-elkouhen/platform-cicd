@@ -20,9 +20,17 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: gitlab
+  ignoreDifferences:
+    - group: ""
+      kind: ConfigMap
+      name: gitlab-minio-config-cm
+      namespace: gitlab
+      jqPathExpressions:
+        - '.data["initialize"]'
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - RespectIgnoreDifferences=true
