@@ -5,7 +5,6 @@ import urllib.request
 import yaml
 
 disabled_resource_names = {
-    "argocd-dex-server",
     "argocd-notifications-cm",
     "argocd-notifications-controller",
     "argocd-notifications-secret",
