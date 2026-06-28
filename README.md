@@ -1,8 +1,11 @@
 # platform-cicd
 
-Plateforme applicative du POC : ArgoCD, GitLab, GitLab Runner, GitLab Agent, registry interne et routes HTTP Gateway API.
+Bootstrap technique de la plateforme applicative du POC : ArgoCD, GitLab,
+GitLab Runner, GitLab Agent, registry interne et routes HTTP Gateway API.
 
-Ce repo se deploie sur le contexte Kubernetes courant. Il ne cree pas de cluster.
+Ce repo se deploie sur le contexte Kubernetes courant. Il ne cree pas de
+cluster. La configuration suivie en continu par ArgoCD vit dans le repo frere
+`../platform-gitops`.
 
 ## Prerequis
 
@@ -12,6 +15,7 @@ Ce repo se deploie sur le contexte Kubernetes courant. Il ne cree pas de cluster
   - `../ci-templates`
   - `../helloworld`
   - `../helloworld-iac`
+  - `../platform-gitops`
 
 ## Usage
 
