@@ -1,0 +1,21 @@
+# Monte le bundle CA local (système + certificat wildcard nip.io self-signed)
+# dans argocd-dex-server, afin que le connecteur GitLab Dex puisse contacter
+# https://gitlab.192.168.33.100.nip.io pendant l'échange OAuth.
+# Le ConfigMap référencé (argocd-dex-ca-bundle) est généré par
+# `make argocd-trust-local-gateway-ca`.
+spec:
+  template:
+    spec:
+      volumes:
+        - name: custom-ca-bundle
+          configMap:
+            name: argocd-dex-ca-bundle
+      containers:
+        - name: dex
+          env:
+            - name: SSL_CERT_FILE
+              value: /custom-ca/ca-certificates.crt
+          volumeMounts:
+            - name: custom-ca-bundle
+              mountPath: /custom-ca
+              readOnly: true

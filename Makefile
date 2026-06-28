@@ -13,12 +13,12 @@ GITOPS_REPO_ROOT   ?= ../platform-gitops
 GITOPS_APPS_FILE   = $(GITOPS_REPO_ROOT)/argocd/apps.yaml
 GITOPS_APPSET_FILE = $(GITOPS_REPO_ROOT)/argocd/managed/apps-appset.yaml
 
-.PHONY: help bootstrap argocd-install argocd-wait argocd-bootstrap argocd-trust-corporate-ca argocd-ingress argocd-url argocd-password gitlab-wait gitlab-password gitlab-url gitlab-status gitlab-runner-token registry-wait registry-url argocd-apps-render check-generated init-project helloworld-status status
+.PHONY: help bootstrap argocd-install argocd-wait argocd-bootstrap argocd-trust-corporate-ca argocd-trust-local-gateway-ca argocd-ingress argocd-url argocd-password gitlab-wait gitlab-password gitlab-url gitlab-status gitlab-runner-token registry-wait registry-url argocd-apps-render check-generated init-project helloworld-status status
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
-bootstrap: argocd-install argocd-wait argocd-trust-corporate-ca argocd-bootstrap argocd-ingress gitlab-wait gitlab-runner-token registry-wait ## Deploie la plateforme sur le contexte Kubernetes courant, sans creer de cluster
+bootstrap: argocd-install argocd-wait argocd-trust-corporate-ca argocd-trust-local-gateway-ca argocd-bootstrap argocd-ingress gitlab-wait gitlab-runner-token registry-wait ## Deploie la plateforme sur le contexte Kubernetes courant, sans creer de cluster
 	@echo ""
 	@echo "Plateforme prete."
 	@echo "GitLab  : https://gitlab.$(GITLAB_DOMAIN)  (root / make gitlab-password)"
@@ -49,6 +49,18 @@ argocd-trust-corporate-ca: ## Cree le ConfigMap CA corporate pour argocd-repo-se
 	rm -rf $$tmpdir
 	kubectl -n $(ARGOCD_NAMESPACE) patch deployment argocd-repo-server --type strategic --patch-file argocd/repo-server-ca-patch.yaml
 	kubectl -n $(ARGOCD_NAMESPACE) rollout status deployment argocd-repo-server --timeout=$(ARGOCD_WAIT_TIMEOUT)
+
+argocd-trust-local-gateway-ca: ## Cree le ConfigMap CA local pour Dex/GitLab OAuth
+	@echo "==> platform-cicd: argocd-trust-local-gateway-ca"
+	@tmpdir=$$(mktemp -d); \
+	dex_pod=$$(kubectl -n $(ARGOCD_NAMESPACE) get pods -l app.kubernetes.io/name=argocd-dex-server -o jsonpath='{.items[0].metadata.name}'); \
+	kubectl -n $(ARGOCD_NAMESPACE) exec $$dex_pod -c dex -- cat /etc/ssl/certs/ca-certificates.crt > $$tmpdir/system-ca-bundle.crt; \
+	kubectl -n default get secret nip-io-wildcard-tls -o jsonpath='{.data.tls\.crt}' | base64 -d > $$tmpdir/nip-io-wildcard.crt; \
+	cat $$tmpdir/system-ca-bundle.crt $$tmpdir/nip-io-wildcard.crt > $$tmpdir/merged-ca-bundle.crt; \
+	kubectl -n $(ARGOCD_NAMESPACE) create configmap argocd-dex-ca-bundle --from-file=ca-certificates.crt=$$tmpdir/merged-ca-bundle.crt --dry-run=client -o yaml | kubectl apply -f -; \
+	rm -rf $$tmpdir
+	kubectl -n $(ARGOCD_NAMESPACE) patch deployment argocd-dex-server --type strategic --patch-file argocd/dex-ca-patch.yaml
+	kubectl -n $(ARGOCD_NAMESPACE) rollout status deployment argocd-dex-server --timeout=$(ARGOCD_WAIT_TIMEOUT)
 
 argocd-ingress: ## Configure ArgoCD en HTTP (bootstrap uniquement ; server.insecure est ensuite maintenu par l'Application argocd-config)
 	@echo "==> platform-cicd: argocd-ingress"
