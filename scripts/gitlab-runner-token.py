@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 
 GITLAB_NAMESPACE = os.environ.get("GITLAB_NAMESPACE", "gitlab")
-GITLAB_URL = os.environ.get("GITLAB_URL", "http://gitlab.192.168.33.100.nip.io")
+GITLAB_URL = os.environ.get("GITLAB_URL", "https://gitlab.192.168.33.100.nip.io")
 SECRET_NAME = os.environ.get("SECRET_NAME", "gitlab-gitlab-runner-secret")
 
 

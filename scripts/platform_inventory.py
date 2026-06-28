@@ -77,7 +77,7 @@ def _normalize_app(app: dict, inventory: dict, pconst: dict) -> dict:
         manifests["projectName"] = f"{name}-iac"
     # repoURL (user-facing, external GitLab or source repo) derived if absent
     if "repoURL" not in manifests:
-        manifests["repoURL"] = f"http://gitlab.{domain}/{manifests['projectPath']}.git"
+        manifests["repoURL"] = f"https://gitlab.{domain}/{manifests['projectPath']}.git"
     # argocdRepoURL: always the in-cluster GitLab URL, never stored in inventory
     manifests["argocdRepoURL"] = f"http://{gitlab_host}/{manifests['projectPath']}.git"
     if "localPath" not in manifests:
@@ -95,7 +95,7 @@ def _normalize_app(app: dict, inventory: dict, pconst: dict) -> dict:
     if "projectName" not in code:
         code["projectName"] = name
     if "repoURL" not in code:
-        code["repoURL"] = f"http://gitlab.{domain}/{_GITLAB_ROOT_NAMESPACE}/{name}.git"
+        code["repoURL"] = f"https://gitlab.{domain}/{_GITLAB_ROOT_NAMESPACE}/{name}.git"
     if "localPath" not in code:
         code["localPath"] = f"../{name}"
     if "mainPushAccessLevel" not in code:

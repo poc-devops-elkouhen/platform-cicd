@@ -21,8 +21,8 @@ help: ## Affiche cette aide
 bootstrap: argocd-install argocd-wait argocd-trust-corporate-ca argocd-bootstrap argocd-ingress gitlab-wait gitlab-runner-token registry-wait ## Deploie la plateforme sur le contexte Kubernetes courant, sans creer de cluster
 	@echo ""
 	@echo "Plateforme prete."
-	@echo "GitLab  : http://gitlab.$(GITLAB_DOMAIN)  (root / make gitlab-password)"
-	@echo "ArgoCD  : http://argocd.$(GITLAB_DOMAIN)  (admin / make argocd-password)"
+	@echo "GitLab  : https://gitlab.$(GITLAB_DOMAIN)  (root / make gitlab-password)"
+	@echo "ArgoCD  : https://argocd.$(GITLAB_DOMAIN)  (admin / make argocd-password)"
 	@echo "Registry: http://registry.$(GITLAB_DOMAIN)"
 
 argocd-install: ## Installe ArgoCD dans le cluster courant
@@ -70,7 +70,7 @@ gitlab-password: ## Affiche le mot de passe root initial de GitLab
 	@kubectl -n $(GITLAB_NAMESPACE) get secret gitlab-gitlab-initial-root-password -o jsonpath='{.data.password}' | base64 -d; echo
 
 gitlab-url: ## Affiche l'URL GitLab
-	@echo "http://gitlab.$(GITLAB_DOMAIN)"
+	@echo "https://gitlab.$(GITLAB_DOMAIN)"
 
 gitlab-status: ## Affiche l'etat GitLab
 	@kubectl -n $(ARGOCD_NAMESPACE) get application gitlab gitlab-routes
@@ -78,7 +78,7 @@ gitlab-status: ## Affiche l'etat GitLab
 
 gitlab-runner-token: ## Cree le Secret K8s du token runner
 	@echo "==> platform-cicd: gitlab-runner-token"
-	GITLAB_NAMESPACE=$(GITLAB_NAMESPACE) GITLAB_URL=http://gitlab.$(GITLAB_DOMAIN) python3 ./scripts/gitlab-runner-token.py
+	GITLAB_NAMESPACE=$(GITLAB_NAMESPACE) GITLAB_URL=https://gitlab.$(GITLAB_DOMAIN) python3 ./scripts/gitlab-runner-token.py
 
 registry-wait: ## Attend que le registry soit pret
 	@echo "==> platform-cicd: registry-wait"
