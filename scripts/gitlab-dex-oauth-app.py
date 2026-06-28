@@ -86,6 +86,7 @@ def main():
         "redirect_uri": f"{ARGOCD_URL}/api/dex/callback",
         "scopes": "openid profile email read_user",
         "confidential": "true",
+        "trusted": "true",
     }, token=auth["access_token"])
 
     patch_argocd_secret(app["application_id"], app["secret"])
