@@ -97,7 +97,7 @@ def _normalize_app(app: dict, inventory: dict, pconst: dict) -> dict:
     if "projectName" not in code:
         code["projectName"] = name
     if "repoURL" not in code:
-        code["repoURL"] = f"https://gitlab.{domain}/{_GITLAB_ROOT_NAMESPACE}/{name}.git"
+        code["repoURL"] = f"https://gitlab.{domain}/{code['projectPath']}.git"
     if "localPath" not in code:
         code["localPath"] = f"../{name}"
     if "mainPushAccessLevel" not in code:
