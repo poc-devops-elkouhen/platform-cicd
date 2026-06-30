@@ -10,14 +10,14 @@ GITOPS_REPO_ROOT   ?= ../platform-gitops
 GITOPS_APPS_FILE   = $(GITOPS_REPO_ROOT)/argocd/apps.yaml
 GITOPS_APPSET_FILE = $(GITOPS_REPO_ROOT)/argocd/managed/apps-appset.yaml
 FLUX_NAMESPACE    ?= flux-system
-GITHUB_PAT        ?=
+SOPS_AGE_KEY_FILE ?= $(HOME)/.config/sops/age/keys.txt
 
-.PHONY: help bootstrap argocd-install argocd-wait argocd-bootstrap argocd-trust-corporate-ca argocd-trust-local-gateway-ca argocd-ingress argocd-url argocd-password gitlab-wait gitlab-password gitlab-url gitlab-status gitlab-dex-oauth-app gitlab-runner-token argocd-apps-render check-generated init-project helloworld-status status flux-github-credentials
+.PHONY: help bootstrap argocd-install argocd-wait argocd-bootstrap argocd-trust-corporate-ca argocd-trust-local-gateway-ca argocd-ingress argocd-url argocd-password gitlab-wait gitlab-password gitlab-url gitlab-status gitlab-dex-oauth-app gitlab-runner-token argocd-apps-render check-generated init-project helloworld-status status flux-sops-age
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
-bootstrap: argocd-install argocd-wait argocd-trust-corporate-ca argocd-trust-local-gateway-ca argocd-bootstrap argocd-ingress gitlab-wait gitlab-dex-oauth-app gitlab-runner-token ## Deploie la plateforme sur le contexte Kubernetes courant, sans creer de cluster
+bootstrap: argocd-install argocd-wait argocd-trust-corporate-ca argocd-trust-local-gateway-ca argocd-bootstrap flux-sops-age argocd-ingress gitlab-wait gitlab-dex-oauth-app gitlab-runner-token ## Deploie la plateforme sur le contexte Kubernetes courant, sans creer de cluster
 	@echo ""
 	@echo "Plateforme prete."
 	@echo "GitLab : https://gitlab.$(GITLAB_DOMAIN)  (root / make gitlab-password)"
@@ -114,15 +114,13 @@ init-project: ## Ajoute/met a jour une app: make init-project CODE_REPO=<url-ou-
 	@test -n "$(IAC_REPO)" || (echo "IAC_REPO est requis" >&2; exit 1)
 	APPS_FILE="$(GITOPS_APPS_FILE)" ./scripts/init-project.py "$(CODE_REPO)" "$(IAC_REPO)"
 
-flux-github-credentials: ## Cree/met a jour le secret github-credentials dans flux-system (GITHUB_PAT requis)
-	@test -n "$(GITHUB_PAT)" || (echo "GITHUB_PAT est requis" >&2; exit 1)
-	@echo "==> platform-cicd: flux-github-credentials"
+flux-sops-age: ## Injecte la cle age privee dans flux-system pour le dechiffrement SOPS (bootstrap uniquement)
+	@test -f "$(SOPS_AGE_KEY_FILE)" || (echo "SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) introuvable" >&2; exit 1)
+	@echo "==> platform-cicd: flux-sops-age"
 	kubectl create namespace $(FLUX_NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
-	kubectl create secret generic github-credentials \
+	kubectl create secret generic sops-age \
 	  --namespace $(FLUX_NAMESPACE) \
-	  --from-literal=username=x-token \
-	  --from-literal=password="$(GITHUB_PAT)" \
-	  --from-literal=github_token="$(GITHUB_PAT)" \
+	  --from-file=age.agekey="$(SOPS_AGE_KEY_FILE)" \
 	  --dry-run=client -o yaml \
 	  | kubectl apply -f -
 
