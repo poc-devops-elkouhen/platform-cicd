@@ -16,7 +16,6 @@ scripts/
   gitlab-tf-credentials.py   Crée le PAT/Secret GitLab consommé par Terraform
   gitlab-dex-oauth-app.py    Crée l'app OAuth GitLab pour Dex
   gitlab-runner-token.py     Crée le token runner et le Secret K8s
-  init-project.py            Déprécié : onboarding app manuel sous argocd/apps/<app>/
 ansible/
   playbook.yml                Étapes ArgoCD/Flux du bootstrap, sélectionnées via --tags
   roles/argocd_trust_ca/      Rôle paramétré, réutilisé par argocd-trust-corporate-ca et argocd-trust-local-gateway-ca
