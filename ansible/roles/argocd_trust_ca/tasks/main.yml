@@ -37,10 +37,11 @@
   changed_when: false
 
 - name: Créer/mettre à jour le ConfigMap {{ trust_ca_configmap }}
-  ansible.builtin.shell: >-
-    kubectl -n {{ trust_ca_namespace }} create configmap {{ trust_ca_configmap }}
-    --from-file=ca-certificates.crt={{ trust_ca_tmpdir.path }}/merged-ca-bundle.crt
-    --dry-run=client -o yaml | kubectl apply -f -
+  ansible.builtin.shell: |
+    set -o pipefail
+    kubectl -n {{ trust_ca_namespace }} create configmap {{ trust_ca_configmap }} \
+      --from-file=ca-certificates.crt={{ trust_ca_tmpdir.path }}/merged-ca-bundle.crt \
+      --dry-run=client -o yaml | kubectl apply -f -
   register: trust_ca_configmap_apply
   changed_when: "'unchanged' not in trust_ca_configmap_apply.stdout"
 
