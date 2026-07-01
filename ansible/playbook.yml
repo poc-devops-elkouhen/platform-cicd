@@ -48,6 +48,8 @@
       tags: [argocd-trust-corporate-ca]
       ansible.builtin.include_role:
         name: argocd_trust_ca
+        apply:
+          tags: [argocd-trust-corporate-ca]
       vars:
         trust_ca_namespace: "{{ argocd_namespace }}"
         trust_ca_wait_timeout: "{{ argocd_wait_timeout }}"
@@ -61,6 +63,8 @@
       tags: [argocd-trust-local-gateway-ca]
       ansible.builtin.include_role:
         name: argocd_trust_ca
+        apply:
+          tags: [argocd-trust-local-gateway-ca]
       vars:
         trust_ca_namespace: "{{ argocd_namespace }}"
         trust_ca_wait_timeout: "{{ argocd_wait_timeout }}"
