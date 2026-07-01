@@ -12,6 +12,14 @@ import yaml
 
 from platform_inventory import default_apps_file, load_inventory, platform_constants
 
+# Secret dockerconfigjson source, deploye une seule fois par `make ghcr-pull-secret`
+# (control-plane). Les Jobs generes ci-dessous le recopient dans chaque namespace
+# applicatif: ArgoCD ne sait pas dechiffrer SOPS nativement (contrairement a Flux),
+# donc un seul secret chiffre sert de source et le reste passe par kubectl.
+_GHCR_SOURCE_NAMESPACE = "argocd"
+_GHCR_SOURCE_SECRET = "ghcr-pull-secret"
+_GHCR_TARGET_SECRET = "ghcr-pull"
+
 
 def app_project(app: dict) -> dict:
     return {
@@ -192,6 +200,125 @@ kubectl -n argocd create secret generic {secret_name} \\
 """
 
 
+def ghcr_pull_secret(app: dict) -> list[dict]:
+    name = app["name"]
+    sa = f"ghcr-pull-{name}"
+    read_role = f"{sa}-read"
+    ns_annotations = {"argocd.argoproj.io/sync-wave": "0"}
+    rbac_annotations = {"argocd.argoproj.io/sync-wave": "1"}
+    resources = [
+        {
+            "apiVersion": "v1",
+            "kind": "ServiceAccount",
+            "metadata": {"name": sa, "namespace": _GHCR_SOURCE_NAMESPACE, "annotations": rbac_annotations},
+        },
+        {
+            "apiVersion": "rbac.authorization.k8s.io/v1",
+            "kind": "Role",
+            "metadata": {"name": read_role, "namespace": _GHCR_SOURCE_NAMESPACE, "annotations": rbac_annotations},
+            "rules": [
+                {
+                    "apiGroups": [""],
+                    "resources": ["secrets"],
+                    "resourceNames": [_GHCR_SOURCE_SECRET],
+                    "verbs": ["get"],
+                }
+            ],
+        },
+        {
+            "apiVersion": "rbac.authorization.k8s.io/v1",
+            "kind": "RoleBinding",
+            "metadata": {"name": read_role, "namespace": _GHCR_SOURCE_NAMESPACE, "annotations": rbac_annotations},
+            "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": read_role},
+            "subjects": [{"kind": "ServiceAccount", "name": sa, "namespace": _GHCR_SOURCE_NAMESPACE}],
+        },
+    ]
+
+    for env in app["environments"]:
+        namespace = env["namespace"]
+        write_role = f"{sa}-{env['name']}-write"
+        resources.extend(
+            [
+                {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": namespace, "annotations": ns_annotations}},
+                {
+                    "apiVersion": "rbac.authorization.k8s.io/v1",
+                    "kind": "Role",
+                    "metadata": {"name": write_role, "namespace": namespace, "annotations": rbac_annotations},
+                    "rules": [
+                        {
+                            "apiGroups": [""],
+                            "resources": ["secrets"],
+                            "resourceNames": [_GHCR_TARGET_SECRET],
+                            "verbs": ["get", "patch"],
+                        },
+                        {"apiGroups": [""], "resources": ["secrets"], "verbs": ["create"]},
+                    ],
+                },
+                {
+                    "apiVersion": "rbac.authorization.k8s.io/v1",
+                    "kind": "RoleBinding",
+                    "metadata": {"name": write_role, "namespace": namespace, "annotations": rbac_annotations},
+                    "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": write_role},
+                    "subjects": [{"kind": "ServiceAccount", "name": sa, "namespace": _GHCR_SOURCE_NAMESPACE}],
+                },
+                {
+                    "apiVersion": "batch/v1",
+                    "kind": "Job",
+                    "metadata": {
+                        "name": f"{sa}-{env['name']}",
+                        "namespace": _GHCR_SOURCE_NAMESPACE,
+                        "annotations": {
+                            "argocd.argoproj.io/hook": "Sync",
+                            "argocd.argoproj.io/sync-wave": "1",
+                            "argocd.argoproj.io/hook-delete-policy": "BeforeHookCreation,HookSucceeded",
+                        },
+                    },
+                    "spec": {
+                        "backoffLimit": 2,
+                        "template": {
+                            "spec": {
+                                "serviceAccountName": sa,
+                                "restartPolicy": "Never",
+                                "containers": [
+                                    {
+                                        "name": "copy-secret",
+                                        "image": "registry.gitlab.com/gitlab-org/build/cng/kubectl:v18.11.5",
+                                        "imagePullPolicy": "IfNotPresent",
+                                        "command": ["/bin/sh", "-ec", ghcr_copy_script(namespace)],
+                                    }
+                                ],
+                            }
+                        },
+                    },
+                },
+            ]
+        )
+
+    return resources
+
+
+def ghcr_copy_script(namespace: str) -> str:
+    return f"""\
+for i in $(seq 1 60); do
+  if kubectl -n {_GHCR_SOURCE_NAMESPACE} get secret {_GHCR_SOURCE_SECRET} >/dev/null 2>&1; then
+    break
+  fi
+  sleep 5
+done
+
+dockerconfig=$(
+  kubectl -n {_GHCR_SOURCE_NAMESPACE} get secret {_GHCR_SOURCE_SECRET} \\
+    -o jsonpath='{{.data.\\.dockerconfigjson}}' | base64 -d
+)
+
+kubectl -n {namespace} create secret generic {_GHCR_TARGET_SECRET} \\
+  --type=kubernetes.io/dockerconfigjson \\
+  --from-literal=.dockerconfigjson="$dockerconfig" \\
+  --dry-run=client -o yaml \\
+  | kubectl apply -f -
+"""
+
+
 def root_appset(pconst: dict) -> dict:
     return {
         "apiVersion": "argoproj.io/v1alpha1",
@@ -261,13 +388,19 @@ def render(apps_file: Path, output_dir: Path, managed_file: Path) -> None:
         app_dir.mkdir()
         write_yaml(app_dir / "app-project.yaml", app_project(app))
         write_yaml(app_dir / "applicationset.yaml", applicationset(app))
+        write_yaml(app_dir / "ghcr-pull-secret.yaml", ghcr_pull_secret(app))
         write_yaml(app_dir / "repo-creds.yaml", repo_creds(app))
         write_yaml(
             app_dir / "kustomization.yaml",
             {
                 "apiVersion": "kustomize.config.k8s.io/v1beta1",
                 "kind": "Kustomization",
-                "resources": ["app-project.yaml", "applicationset.yaml", "repo-creds.yaml"],
+                "resources": [
+                    "app-project.yaml",
+                    "applicationset.yaml",
+                    "ghcr-pull-secret.yaml",
+                    "repo-creds.yaml",
+                ],
             },
         )
 
