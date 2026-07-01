@@ -13,7 +13,7 @@ _PLATFORM_DEFAULTS = {
     "registry": {"host": "ghcr.io/poc-devops-elkouhen"},
 }
 
-_GITLAB_ROOT_NAMESPACE = "root"
+_GITLAB_APPS_NAMESPACE = "infra"
 
 
 def default_apps_file() -> Path:
@@ -73,14 +73,14 @@ def _normalize_app(app: dict, inventory: dict, pconst: dict) -> dict:
     # manifests: projectPath and projectName derived from name
     manifests = dict(app.get("manifests", {}))
     if "projectPath" not in manifests:
-        manifests["projectPath"] = f"{_GITLAB_ROOT_NAMESPACE}/{name}-iac"
+        manifests["projectPath"] = f"{_GITLAB_APPS_NAMESPACE}/{name}-iac"
     if "projectName" not in manifests:
         manifests["projectName"] = f"{name}-iac"
     # repoURL (user-facing, external GitLab or source repo) derived if absent
     if "repoURL" not in manifests:
         manifests["repoURL"] = f"https://gitlab.{domain}/{manifests['projectPath']}.git"
-    # argocdRepoURL: URL publique GitLab (via ingress), jamais stockée dans l'inventaire
-    manifests["argocdRepoURL"] = f"http://gitlab.{domain}/{manifests['projectPath']}.git"
+    # argocdRepoURL: always the in-cluster GitLab URL, never stored in inventory
+    manifests["argocdRepoURL"] = f"http://{gitlab_host}/{manifests['projectPath']}.git"
     if "localPath" not in manifests:
         manifests["localPath"] = f"../{name}-iac"
     if "mainPushAccessLevel" not in manifests:
@@ -94,7 +94,7 @@ def _normalize_app(app: dict, inventory: dict, pconst: dict) -> dict:
     # code: repoURL (user-facing, external GitLab) and localPath derived if absent
     code = dict(app.get("code", {}))
     if "projectPath" not in code:
-        code["projectPath"] = f"{_GITLAB_ROOT_NAMESPACE}/{name}"
+        code["projectPath"] = f"{_GITLAB_APPS_NAMESPACE}/{name}"
     if "projectName" not in code:
         code["projectName"] = name
     if "repoURL" not in code:
