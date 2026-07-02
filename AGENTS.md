@@ -13,8 +13,10 @@ Une fois le bootstrap effectué, ArgoCD gère la plateforme en continu depuis
 ## Prérequis
 
 - `kubectl` dans le PATH avec un kubeconfig valide pointant sur le cluster cible.
-- `ansible-playbook` dans le PATH (étapes ArgoCD/Flux du bootstrap, cf.
-  `ansible/`).
+- `ansible-playbook` dans le PATH. Les étapes ArgoCD/Flux/GitLab du bootstrap
+  vivent désormais dans le rôle `platform_bootstrap` du dépôt voisin
+  `cluster/ansible/` (cf. `cluster/AGENTS.md`) — suppose un checkout sibling
+  standard du POC (`cluster` cloné à côté de `platform-cicd`).
 - Le cluster doit avoir été provisionné par `cluster` (Traefik, Gateway API,
   MetalLB actifs).
 
@@ -48,8 +50,12 @@ make status                 # État des Applications ArgoCD
 | `scripts/gitlab-dex-oauth-app.py` | Configure SSO GitLab → Dex → ArgoCD |
 | `scripts/gitlab-runner-token.py` | Crée le Secret K8s du token runner |
 | `scripts/bootstrap-tags.py` | Calcule le sous-ensemble d'étapes (`--tags`) à passer à `ansible-playbook` selon `START_AT`/`STOP_AFTER` — ne séquence rien lui-même |
-| `ansible/playbook.yml` | Séquence complète du bootstrap (ArgoCD, Flux, GitLab), une tâche/rôle taguée par étape, exécutée par un seul `ansible-playbook --tags <étapes>` |
-| `ansible/roles/argocd_trust_ca/` | Rôle paramétré (déploiement, ConfigMap, patch, commande d'extraction du certificat additionnel) réutilisé par `argocd-trust-corporate-ca` et `argocd-trust-local-gateway-ca` |
+
+Le code Ansible (playbook, rôles `platform_bootstrap` et `argocd_trust_ca`)
+a été fusionné dans `cluster/ansible/` (cf. `cluster/AGENTS.md`). Ce dépôt ne
+garde que les scripts et manifests qu'il invoque (`scripts/*.py`,
+`argocd/*.yaml`), référencés depuis `cluster/ansible` via la variable
+`platform_cicd_root` (le `Makefile` la fixe à `$(CURDIR)`).
 
 ## Ordre de préférence pour le déploiement
 
@@ -60,9 +66,10 @@ point d'entrée/enchaînement — y compris pour l'orchestration de plusieurs
 que dans un enchaînement de cibles Make. C'est pourquoi les étapes de
 bootstrap ArgoCD/Flux/GitLab (autrefois du shell brut dans le Makefile, puis
 séquencées par `scripts/run-bootstrap.py` en appelant `make <étape>` en
-boucle) vivent maintenant dans `ansible/playbook.yml` : `make bootstrap` ne
-calcule plus qu'un `--tags` et délègue tout le séquencement à un seul
-`ansible-playbook`.
+boucle) vivent maintenant dans le rôle `platform_bootstrap` de
+`cluster/ansible/` : `make bootstrap` ne calcule plus qu'un `--tags` et
+délègue tout le séquencement à un seul `ansible-playbook`, exécuté dans le
+dépôt voisin.
 
 ## Règles critiques
 
